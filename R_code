@@ -1,0 +1,167 @@
+# -----------------------------------------------------------------------------
+# Title: Analyzing Frequently-Searched Terms on THD Website
+# Author: Jacqueline Woo (jacqwoo@gmail.com) with Manasa Gudimella
+# Date: 2016
+# R Version: 3.6.3
+# RStudio Version: 1.2.5033
+# -----------------------------------------------------------------------------
+
+setwd("C:/Users/jxw4692/Documents/R/Customer Search Terms")
+install.packages("gapminder")
+suppressPackageStartupMessage(library(gapminder))
+library(gapminder)
+library(magrittr)
+library(ggplot2)
+
+###########################
+library(dplyr)
+
+thd_brand <- read.csv("Brand_Classification_THD.csv", sep = ",", header = T, stringsAsFactors = F, na.strings = c("n/a","n\a","~"))
+searchFreq <- read.csv("Evar40_Clean.csv", header = T, stringsAsFactors = F)
+searchFreq$Search_Instances <- as.numeric(searchFreq$Search_Instances)
+
+library(stringr)
+
+hist(searchFreq$Search_Instances, 
+     main="Histogram Search Instances", 
+     xlab="Search Instances", 
+     border="blue", 
+     col="red",
+     xlim=c(50,10000),
+     las=1, 
+     breaks=5)
+
+hist(searchFreq$Search_Instances)
+
+thdbrand.sample <- thd_brand[sample(1:nrow(thd_brand),50, replace = F),]
+customerSearch.sample <- searchFreq[sample(1:nrow(searchFreq),50, replace = F),]
+
+setwd("C:/Users/MXG4153/Desktop")
+write.csv(test, file = "SampleBrands_del.csv")
+write.csv(customerSearch.sample, file = "customerSearch_del.csv")
+
+
+recognized.Brand <- searchFreq %>% filter(Brand == 1) %>% 
+  select(Clean.Search.String, X18277758) %>%
+  distinct(Clean.Search.String)
+
+Rest <- searchFreq %>% filter(Rest ==1,Brand==0) %>%
+  select(X18277758, Clean.Search.String) %>%
+  distinct(Clean.Search.String)
+
+thd.categories <- read.csv("THDCategories.csv", stringsAsFactors = F, na.strings = "~", header = T, sep = ",")
+colnames(thd.categories) <- c("Class", "Dept", "SubDept", "SubClass")
+
+thd.all <- transmute(thd.categories, Categories = Class + Dept + SubDept + SubClass)
+
+thd.classname <- thd.categories %>% distinct(Class) %>% select(Class)
+thd.deptname <- thd.categories %>% distinct(Dept) %>% select(Dept)
+thd.subdept <- thd.categories %>%  distinct(SubDept) %>% select(SubDept)
+thd.SubClass <- thd.categories %>% distinct(SubClass) %>% select(SubClass)
+
+
+names(thd.deptname) <- names(thd.subdept) 
+names(thd.SubClass) <- names(thd.subdept)
+names(thd.classname) <- names(thd.subdept)
+
+thd.categories <- rbind(thd.deptname, thd.subdept, thd.SubClass, thd.classname)
+thd.categories <- unique(as.vector(thd.categories))
+thd.categories <- distinct(thd.categories) 
+
+install.packages("stringdist")
+library(stringdist)
+library("stringdist", lib.loc="~/R/win-library/3.2")
+
+Test <- Rest[sample(1:nrow(Rest),50,replace = F),]
+Test[,2]
+
+sdist <- matrix(0,nrow(Test),3) # created a 50 x 50 matrix with zeros(will fill this matrix with the distances)
+sdist <- as.data.frame(dist) 
+a <- as.data.frame(Test[,2])
+b <- as.data.frame(thd.categories[,1])
+for(i in 1:nrow(Test)){
+  
+    sdist[i,] <- sort(stringdistmatrix(a[i,1], b[,1]))[1:3]
+  
+}
+
+
+sdist <- matrix(0,50,3) 
+sdist <- as.data.frame(sdist) 
+
+for(i in 1:50){
+  sdist[i,] <- sort(stringdistmatrix(a[i,1], b[,1]))[1:3]
+}
+
+
+
+
+#Delete Later
+dir.name <- "C:/Users/MXG4153/Desktop/DataCleaningCAMarket/"
+setwd(dir.name)
+test <- read.csv("Project_18_Lowes_09_Mar_2016_Ugam.csv", header = T, na.strings = c("n/a","n\a","NA", "na"), sep = ",", stringsAsFactors = F)
+test1 <- test %>% select(product_id, product_name, mpn, canonical_url,Sku_Id) %>% distinct(product_id, mpn, canonical_url,Sku_Id) %>% mutate(UID = paste(product_id,"_",product_name,"_",mpn), ID = paste(product_id,"_",mpn))
+test <- test1 %>% mutate(UID = paste(product_id,"_", product_name, "_", mpn), ID= paste(product_id,"_",mpn))
+
+write.csv(test1, file = "Productid_thdSKU.csv")
+
+
+############################Jac & Manasa's Test String Distance Code #######################################################################
+install.packages("RecordLinkage")
+library(RecordLinkage)
+word <- c('test','newyork','yest')
+words <- c('Teest','teeeest','New York City','yeast','text','Test')
+words <- c("m", "seet", "rown", "happy")
+
+ClosestMatch <- function(string, stringVector){
+  
+  distance = levenshteinSim(string, stringVector);
+  stringVector[distance == max(distance)][1]
+  
+}
+
+#Create list of brands
+THD_Brands <- read.csv("Thd_Groups.csv", stringsAsFactors = F, na.strings = "~", header = T, sep = ",")
+colnames(THD_Brands)
+THD_Brands_List <- c(THD_Brands$thd_group)
+
+#Create list of words
+Rest_List <- read.csv("Unclassified_Customer_Search_terms.csv", stringsAsFactors = F, na.strings = "~", header = T, sep = ",")
+Rest_List <- c(Rest_List$clean_search_string)
+
+#this works!!!
+test <- sapply(Rest_List,function(x) ClosestMatch(x, THD_Brands_List))
+Matched_Rest <- as.data.frame(test,row.names=NULL)
+names(Matched_Rest) <- c("Matched")
+
+#append Matched_Rest to data.frame(Rest_List)
+Rest_List_Df <- as.data.frame(Rest_List)
+names(Rest_List_Df) <- c("Unclassified Search Terms")
+Rest_List_Matched <- cbind(Rest_List_Df,Matched_Rest)
+
+#save as csv
+write.csv(Rest_List_Matched,file="Rest_List_Matched.csv")
+
+#save global environment
+save(list=ls(all = TRUE),file="Customer Search Term Freq.RData")
+
+#######################
+ClosestMatch("test",words) # "text" "Test"
+ClosestMatch("newyro",words) #  "New York City"
+ClosestMatch("yest", words) # "yeast"
+
+ClosestMatch("flooring", as.character(thd.categories))
+class(words)
+class(thd.categories)
+
+Rest$Clean.Search.String <- toupper(Rest$Clean.Search.String)
+test <- inner_join(thd.categories, Rest, by = c("SubDept" = "Clean.Search.String"))
+
+
+test2 <- Rest %>% group_by(Clean.Search.String) %>% summarize(bestMatch = as.data.frame(ClosestMatch(Clean.Search.String,thd.categories)))
+
+ClosestMatch("FLOOR",thd.categories)
+
+
+write.csv(thd.categories,file = "Thd_Groups.csv", na = "")
+write.csv(Rest, file = "Unclassified_Customer_Search_terms.csv", na = "")
